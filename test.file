@@ -1,0 +1,2 @@
+int x = 1 + (5 * 2) - 2
+println(x)
