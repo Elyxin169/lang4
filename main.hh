@@ -17,7 +17,8 @@ enum Errors
 {
     compilerArgsError = 1,
     fileReadError,
-    syntaxError
+    syntaxError,
+    typeError
 };
 
 #endif

@@ -5,7 +5,6 @@
     #include "classes.hh"
     using namespace std;
     vector<Token> tokens;
-    int mylineno = 0;
     void a() {
 
     }
@@ -26,50 +25,48 @@ name    ({alpha}|{dig}|\$)({alpha}|{dig}|[_.\-/$])*
 num1    [-+]?{dig}+\.?([eE][-+]?{dig}+)?
 num2    [-+]?{dig}*\.{dig}+([eE][-+]?{dig}+)?
 number  {num1}|{num2}
+int     [-]?{dig}+
+float   [-]?{dig}+\.{dig}+
 left_paren [\(]
 right_paren [\)]
 comma [,]
 assign [=]
-type_name (int|str)
+type_name (int|str|float|bool)
+bool (true|false)
 mathop [\+\-\/\*]
+comparision (<|>|==|!=)
 %%
 
 {ws}    /* skip blanks and tabs */
-{number} {
-    Token t("number", YYText());
+{int} {
+    Token t("int", YYText());
+    tokens.push_back(t);
+}
+{float} {
+    Token t("float", YYText());
     tokens.push_back(t);
 }
 {mathop} {
     Token t("mathop", YYText());
     tokens.push_back(t);
 }
-
-
-"/*"    {
-    int c;
-
-    while ((c = yyinput()) != 0)
-    {
-        if (c == '\n')
-            ++mylineno;
-
-        else if (c == '*')
-        {
-            if ((c = yyinput()) == '/')
-                break;
-            else
-                unput(c);
-        }
-    }
+{comparision} {
+    Token t("cmp", YYText());
+    tokens.push_back(t);
 }
+{bool}  {
+    Token t("bool", YYText());
+    tokens.push_back(t);
+};
 {type_name}  {
     Token t("type_name", YYText());
     tokens.push_back(t);
 };
-\n        {
+\n {}
+;        {
     Token t("line_end", "uwu");
     tokens.push_back(t);
-}
+};
 {name}    {
     Token t("identifier", YYText());
     tokens.push_back(t);
@@ -112,6 +109,8 @@ int main(int argc, char** argv) {
     while (lex.yylex())
     {
     }
+
+    // tokens.push_back(Token("line_end", ""));
 
     for (Token t : tokens) {
         fprintf(lexOut, "%s\n", t.save().c_str());

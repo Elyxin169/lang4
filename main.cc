@@ -2,8 +2,14 @@
 
 // constant operators
 std::unordered_map<str, int> operators;
+std::unordered_map<str, MemoryObj *> memory;
 
 void interpret(AST ast, std::unordered_map<str, MemoryObj *> *memory);
+
+// Node* iden = new Node(s1, s2)
+#define newNode(iden, s1, s2) Node *iden = new Node(s1, s2)
+#define nodeChild(n1, n2) n1->children.push_back(n2);
+// if i put this in macros.hh id probably forget about it, so its here now
 
 std::vector<Token> lex(char *fileName)
 {
@@ -21,15 +27,12 @@ std::vector<Token> lex(char *fileName)
     str line = "";
     for (int lineCount = 0; std::getline(lexed, line, '\n'); lineCount++)
     {
-        tokens.push_back(Token::readToken(line));
+        Token t = Token::readToken(line);
+        // log("%s, %s\n", t.name.c_str(), t.value.c_str());
+        tokens.push_back(t);
     }
     return tokens;
 }
-
-// Node* iden = new Node(s1, s2)
-#define newNode(iden, s1, s2) Node *iden = new Node(s1, s2)
-#define nodeChild(n1, n2) n1->children.push_back(n2);
-// if i put this in macros.hh id probably forget about it, so its here now
 
 int getLineEndI(std::vector<Token> *tokens, int currI)
 {
@@ -37,7 +40,6 @@ int getLineEndI(std::vector<Token> *tokens, int currI)
     for (; tokens->at(t).name != "line_end" && t < tokens->size(); t++)
         ;
     return t;
-    // UNTESTED
 }
 
 #define lineEnd(x) int x = getLineEndI(&tokens, i)
@@ -65,6 +67,8 @@ AST parse(std::vector<Token> tokens)
         // handle new lines
         if (v.name == "line_end")
         {
+            if (i == tokens.size() - 1)
+                break;
             lineCount++;
             newNode(newLine, "line", std::to_string(lineCount));
             nodeChild(root, newLine);
@@ -77,37 +81,60 @@ AST parse(std::vector<Token> tokens)
         if (tokens[i].name == "type_name" && tokens[i + 1].name == "identifier" && tokens[i + 2].name == "assign")
         {
             i += 3;
-            if (tokens[i].name == "number")
-            {
-                // declaration -> (int, 69)
-                newNode(temp1, "declaration", "something idk");
-                newNode(temp2, "identifier", tokens[i - 2].value);
-                newNode(temp3, "expression", "");
-                // newNode(temp3, "int", tokens[i + 3].value);
-                nodeChild(temp1, temp2);
-                nodeChild(temp1, temp3);
-                nodeChild(currLine, temp1);
+            // declaration -> (int, 69)
+            newNode(temp1, "declaration", "hi mom");
+            newNode(temp2, "identifier", tokens[i - 2].value);
+            newNode(temp3, "expression", "");
+            // newNode(temp3, "int", tokens[i + 3].value);
+            nodeChild(temp1, temp2);
+            nodeChild(temp1, temp3);
+            nodeChild(currLine, temp1);
 
-                lineEnd(uwu);
-                for (; i < uwu; i++)
-                {
-                    newNode(t, tokens[i].name, tokens[i].value);
-                    nodeChild(temp3, t);
-                }
-                i--;
+            lineEnd(uwu);
+            for (; i < uwu; i++)
+            {
+                newNode(t, tokens[i].name, tokens[i].value);
+                nodeChild(temp3, t);
             }
+            i--;
         }
         else if (tokens[i].name == "identifier" && tokens[i + 1].name == "left_paren")
         {
             // blindly assuming it ends in a )
             // call -> (name, value)
-            newNode(temp1, "func_call", "something idk");
+            newNode(temp1, "func_call", "hi mom");
             newNode(temp2, "identifier", tokens[i].value);
-            newNode(temp3, "identifier", tokens[i + 2].value);
+            newNode(temp3, "expression", "");
             nodeChild(temp1, temp2);
             nodeChild(temp1, temp3);
             nodeChild(currLine, temp1);
-            i += 3;
+
+            i += 2;
+            lineEnd(uwu);
+            for (; i < uwu - 1; i++) // -1 accounts for closing brace
+            {
+                newNode(t, tokens[i].name, tokens[i].value);
+                nodeChild(temp3, t);
+            };
+        }
+        else if (tokens[i].name == "identifier" && tokens[i + 1].name == "assign")
+        {
+            // (reassignment) -> (iden, expr)
+            newNode(temp1, "reassignment", "hi mom");
+            newNode(temp2, "identifier", tokens[i].value);
+            newNode(temp3, "expression", "");
+            nodeChild(temp1, temp2);
+            nodeChild(temp1, temp3);
+            nodeChild(currLine, temp1);
+
+            i += 2;
+            lineEnd(uwu);
+            for (; i < uwu; i++)
+            {
+                newNode(t, tokens[i].name, tokens[i].value);
+                nodeChild(temp3, t);
+            };
+            i--;
         }
         else
         {
@@ -127,6 +154,70 @@ AST parse(std::vector<Token> tokens)
     return AST(root);
 }
 
+Node *meth(Node *op, Node *lh, Node *rh)
+{
+    // log("%s, %s\n", op->name.c_str(), op->value.c_str());
+    str o = op->value;
+    if ((lh->name == "float" || rh->name == "float") && op->name == "mathop") // if any of the 2 sides is a float, both will now be floats
+    {
+        float result = std::stof(lh->value);
+        switch (o[0])
+        {
+        case '+':
+            result += std::stof(rh->value);
+            break;
+        case '-':
+            result -= std::stof(rh->value);
+            break;
+        case '*':
+            result *= std::stof(rh->value);
+            break;
+        case '/':
+            result /= std::stof(rh->value);
+            break;
+        }
+        newNode(t, "float", std::to_string(result));
+        return t;
+    }
+    else if (op->name == "cmp")
+    {
+        // log("%s, %s %s %s, %s\n", lh->name.c_str(), lh->value.c_str(), op->value.c_str(), rh->name.c_str(), rh->value.c_str());
+        bool result = false;
+        if (o == ">")
+            result = std::stof(lh->value) > std::stof(rh->value);
+        else if (o == "<")
+            result = std::stof(lh->value) < std::stof(rh->value);
+        // only gonna work on ints
+        else if (o == "!=")
+            result = std::stoi(lh->value) != std::stoi(rh->value);
+        else if (o == "==")
+            result = std::stoi(lh->value) == std::stoi(rh->value);
+        newNode(t, "bool", result ? "true" : "false");
+        return t;
+    }
+    else
+    {
+        int result = std::stoi(lh->value);
+        switch (o[0])
+        {
+        case '+':
+            result += std::stoi(rh->value);
+            break;
+        case '-':
+            result -= std::stoi(rh->value);
+            break;
+        case '*':
+            result *= std::stoi(rh->value);
+            break;
+        case '/':
+            result /= std::stoi(rh->value);
+            break;
+        }
+        newNode(t, "int", std::to_string(result));
+        return t;
+    }
+}
+
 Node *evalExpression(Node *root)
 {
     // should get a node such that (expression) -> (420, +, 69)....
@@ -134,94 +225,85 @@ Node *evalExpression(Node *root)
     if (root->children.size() == 1)
     {
         // TODO: handle functions and shi
-        const Node *child = root->children[0];
-        if (child->name == "number")
+        Node *child = root->children[0];
+        if (child->name == "int" || child->name == "float" || child->name == "bool")
         {
-            newNode(t, "int", child->value);
+            newNode(t, child->name, child->value);
+            // log("%s, %s\n", child->name.c_str(), child->value.c_str());
             return t;
+        }
+        else if (child->name == "identifier")
+        {
+            MemoryObj *obj = memory[child->value];
+            if (obj->type == "int")
+            {
+                newNode(t, "int", std::to_string(obj->getInt()));
+                return t;
+            }
+            else if (obj->type == "float")
+            {
+                newNode(t, "float", std::to_string(obj->getFloat()));
+                return t;
+            }
+            else if (obj->type == "bool")
+            {
+                newNode(t, "bool", obj->getBool() ? "true" : "false");
+                return t;
+            }
         }
     }
     else if (root->children.size() % 2 == 1)
     {
         // shunting yard algorithm
-        /*
 
-        Create two empty stacks: operator_stack and operand_stack.
-        While there are still tokens to be read in:
-            Get the next token.
-            If the token is:
-                A number: push it onto the operand_stack.
-                A variable: get its value, and push onto the operand_stack.
-                A left parenthesis: push it onto the operator_stack.
-                A right parenthesis:
-                    While the thing on top of the operator_stack is not a left parenthesis:
-                        Pop the operator from the operator_stack.
-                        Pop the value stack twice, getting two operands.
-                        Apply the operator to the operands, in the correct order.
-                        Push the result onto the operand_stack.
-                    Pop the left parenthesis from the operator_stack, and discard it.
-                An operator (call it thisOp):
-                    While the operator_stack is not empty, and the top thing on the operator_stack has the same or greater precedence as thisOp:
-                        Pop the operator from the operator_stack.
-                        Pop the value stack twice, getting two operands.
-                        Apply the operator to the operands, in the correct order.
-                        Push the result onto the operand_stack.
-                    Push thisOp onto the operator_stack.
-        While the operator_stack is not empty:
-            Pop the operator from the operator_stack.
-            Pop the value stack twice, getting two operands.
-            Apply the operator to the operands, in the correct order.
-            Push the result onto the operand_stack.
-        At this point, the operator_stack should be empty, and the operand_stack should have only one value in it, which is the final result.
-        */
         std::stack<Node *> operator_stack;
         std::stack<Node *> operand_stack;
 
         for (Node *n : root->children)
         {
-            if (n->name == "number")
+            if (n->name == "int" || n->name == "float" || n->name == "bool")
                 operand_stack.push(n);
             else if (n->name == "identifier")
-                69; // implement later
+            {
+                MemoryObj *obj = memory[n->value];
+                if (obj->type == "int")
+                {
+                    newNode(t, "int", std::to_string(obj->getInt()));
+                    operand_stack.push(t);
+                }
+                else if (obj->type == "float")
+                {
+                    newNode(t, "float", std::to_string(obj->getFloat()));
+                    operand_stack.push(t);
+                }
+            }
             else if (n->name == "left_paren")
                 operator_stack.push(n);
             else if (n->name == "right_paren")
             {
                 while (!operator_stack.empty() && operator_stack.top()->name != "left_paren")
                 {
-                    str op = operator_stack.top()->value;
+                    Node *op = operator_stack.top();
                     operator_stack.pop();
                     Node *rh = operand_stack.top();
                     operand_stack.pop();
                     Node *lh = operand_stack.top();
                     operand_stack.pop();
 
-                    // blindly assuming both sides are ints
-                    int result = std::stoi(lh->value);
-                    if (op == "+")
-                        result += std::stoi(rh->value);
-                    else if (op == "-")
-                        result -= std::stoi(rh->value);
-                    else if (op == "*")
-                        result *= std::stoi(rh->value);
-                    else if (op == "/")
-                        result /= std::stoi(rh->value);
-
-                    newNode(t, "int", std::to_string(result));
-                    operand_stack.push(t);
+                    operand_stack.push(meth(op, lh, rh));
                 }
                 if (!operator_stack.empty() && operator_stack.top()->name == "left_paren")
                     operator_stack.pop();
                 else
                     throw std::runtime_error("Mismatched parentheses");
             }
-            else if (n->name == "mathop")
+            else if (n->name == "mathop" || n->name == "cmp")
             {
                 Node *thisOp = n;
                 while (!operator_stack.empty() && operator_stack.top()->name == "mathop")
                 {
-                    str op = operator_stack.top()->value;
-                    if (operators[op] >= operators[thisOp->value])
+                    Node *op = operator_stack.top();
+                    if (operators[op->value] >= operators[thisOp->value])
                     {
                         operator_stack.pop();
                         Node *rh = operand_stack.top();
@@ -229,19 +311,7 @@ Node *evalExpression(Node *root)
                         Node *lh = operand_stack.top();
                         operand_stack.pop();
 
-                        // blindly assuming both sides are ints
-                        int result = std::stoi(lh->value);
-                        if (op == "+")
-                            result += std::stoi(rh->value);
-                        else if (op == "-")
-                            result -= std::stoi(rh->value);
-                        else if (op == "*")
-                            result *= std::stoi(rh->value);
-                        else if (op == "/")
-                            result /= std::stoi(rh->value);
-
-                        newNode(t, "int", std::to_string(result));
-                        operand_stack.push(t);
+                        operand_stack.push(meth(op, lh, rh));
                     }
                     else
                     {
@@ -254,30 +324,18 @@ Node *evalExpression(Node *root)
 
         while (operator_stack.size() != 0)
         {
-            str op = operator_stack.top()->value;
+            Node *op = operator_stack.top();
             operator_stack.pop();
             Node *rh = operand_stack.top();
             operand_stack.pop();
             Node *lh = operand_stack.top();
             operand_stack.pop();
 
-            // blindly assuming both sides are ints
-            int result = std::stoi(lh->value);
-            if (op == "+")
-                result += std::stoi(rh->value);
-            else if (op == "-")
-                result -= std::stoi(rh->value);
-            else if (op == "*")
-                result *= std::stoi(rh->value);
-            else if (op == "/")
-                result /= std::stoi(rh->value);
-
-            newNode(t, "int", std::to_string(result));
-            operand_stack.push(t);
+            operand_stack.push(meth(op, lh, rh));
         }
         // At this point, the operator_stack should be empty, and the operand_stack
         // should have only one value in it, which is the final result.
-        newNode(t, "int", operand_stack.top()->value);
+        newNode(t, operand_stack.top()->name, operand_stack.top()->value);
         return t;
     }
     else
@@ -308,18 +366,76 @@ void interpret(AST ast, std::unordered_map<str, MemoryObj *> *memory)
                 MemoryObj *newData = new MemoryObj("int", num);
                 memory->insert({lh->value, newData});
             }
+            else if (rh->name == "float")
+            {
+                float *num = (float *)malloc(sizeof(float));
+                *num = std::atof(rh->value.c_str());
+                MemoryObj *newData = new MemoryObj("float", num);
+                memory->insert({lh->value, newData});
+            }
+            else if (rh->name == "bool")
+            {
+                bool *num = (bool *)malloc(sizeof(bool));
+                *num = true ? rh->value == "true" : false;
+                MemoryObj *newData = new MemoryObj("bool", num);
+                memory->insert({lh->value, newData});
+            }
+            else
+            {
+                lang::skillIssue(("unknown type: " + rh->name).c_str(), Errors::typeError);
+            }
         }
         else if (first->name == "func_call")
         {
             Node *lh = first->children[0];
             Node *rh = first->children[1];
-            if (lh->value == "println")
+            rh = evalExpression(rh);
+            // if (lh->value == "println")
+            if (lh->value[0] == 'p' && lh->value[1] == 'r' && lh->value[2] == 'i' && lh->value[3] == 'n' && lh->value[4] == 't')
             {
-                MemoryObj *obj = memory->at(rh->value);
-                if (obj->type == "int")
+                if (rh->name == "int")
                 {
-                    printf("%d\n", obj->getInt());
+                    printf("%d", std::stoi(rh->value));
                 }
+                else if (rh->name == "float")
+                {
+                    printf("%.4f", std::stof(rh->value));
+                }
+                else if (rh->name == "bool")
+                {
+                    printf("%s", rh->value.c_str());
+                }
+                else
+                {
+                    lang::skillIssue(("cant print type: " + rh->name).c_str(), 69);
+                }
+                if (lh->value.length() > 5)
+                    if (lh->value[5] == 'l' && lh->value[6] == 'n')
+                        printf("\n");
+            }
+        }
+        else if (first->name == "reassignment")
+        {
+            Node *lh = first->children[0];
+            Node *rh = first->children[1]; // should be an expression
+            rh = evalExpression(rh);
+            if (rh->name == "int")
+            {
+                int *num = (int *)memory->at(lh->value)->data;
+                *num = std::stoi(rh->value);
+                memory->at(lh->value)->data = num;
+            }
+            else if (rh->name == "float")
+            {
+                float *num = (float *)memory->at(lh->value)->data;
+                *num = std::stof(rh->value);
+                memory->at(lh->value)->data = num;
+            }
+            else if (rh->name == "bool")
+            {
+                bool *num = (bool *)memory->at(lh->value)->data;
+                *num = true ? rh->value == "true" : false;
+                memory->at(lh->value)->data = num;
             }
         }
     }
@@ -333,17 +449,19 @@ int main(int argc, char **argv)
     }
     // log("%d\n", argc);
 
-    operators["+"] = 1;
-    operators["-"] = 1;
-    operators["*"] = 2;
-    operators["/"] = 2;
+    operators["+"] = 2;
+    operators["-"] = 2;
+    operators["*"] = 3;
+    operators["/"] = 3;
+    operators[">"] = 1;
+    operators["<"] = 1;
+    operators["=="] = 1;
+    operators["!="] = 1;
 
     std::vector<Token> tokens = lex(argv[1]);
     AST ast = parse(tokens);
 
-    std::unordered_map<str, MemoryObj *> memory;
-
-    // ast.print();
+    ast.print();
     interpret(ast, &memory);
     // printf("asd, %s, %d", memory["asd"]->type.c_str(), memory["asd"]->getInt());
     return 0;

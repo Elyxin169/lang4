@@ -1,2 +1,6 @@
-int x = 1 + (5 * 2) - 2
-println(x)
+bool a = 1 == 1;
+println(a);
+bool b = 1 != 1;
+println(b);
+a = 7.8 > 7;
+println(a);

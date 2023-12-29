@@ -104,6 +104,14 @@ public:
     {
         return *((int *)this->data); // pointer magix
     }
+    float getFloat()
+    {
+        return *((float *)this->data);
+    }
+    bool getBool()
+    {
+        return *((bool *)this->data);
+    }
 };
 
 #endif
